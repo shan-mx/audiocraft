@@ -5,6 +5,8 @@ from starlette.middleware.cors import CORSMiddleware
 from audiocraft.data.audio import audio_to_base64
 from audiocraft.models import MAGNeT
 
+MODEL_NAME = "facebook/magnet-small-30secs"
+
 app = FastAPI()
 
 app.add_middleware(
@@ -20,7 +22,7 @@ class GenMusicRequest(BaseModel):
     text: str
 
 
-model = MAGNeT.get_pretrained("facebook/magnet-small-30secs")
+model = MAGNeT.get_pretrained(MODEL_NAME)
 
 model.set_generation_params(
     use_sampling=True,
