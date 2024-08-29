@@ -42,6 +42,11 @@ async def gen(request: GenMusicRequest):
     return audio_to_base64(output.cpu(), model.sample_rate, "ogg")
 
 
+@app.get("/health")
+def health():
+    return {"status": "ok"}
+
+
 if __name__ == "__main__":
     import uvicorn
 
