@@ -39,7 +39,7 @@ model.set_generation_params(
 @app.post("/gen")
 async def gen(request: GenMusicRequest):
     output = model.generate(descriptions=[request.text])[0]
-    return audio_to_base64(output.cpu(), model.sample_rate, "ogg")
+    return audio_to_base64(output.cpu(), model.sample_rate, "mp3")
 
 
 @app.get("/health")
