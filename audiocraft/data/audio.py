@@ -9,7 +9,9 @@ Audio IO methods are defined in this module (info, read, write),
 We rely on av library for faster read when possible, otherwise on torchaudio.
 """
 
+import base64
 from dataclasses import dataclass
+import io
 from pathlib import Path
 import logging
 import typing as tp
@@ -349,3 +351,71 @@ def save_spectrograms(
         ax[i].label_outer()
     fig.savefig(path, bbox_inches="tight")
     plt.close()
+
+def audio_to_base64(
+    wav: torch.Tensor,
+    sample_rate: int,
+    format: str = "wav",
+    normalize: bool = True,
+    strategy: str = "peak",
+    peak_clip_headroom_db: float = 1,
+    rms_headroom_db: float = 18,
+    loudness_headroom_db: float = 14,
+    loudness_compressor: bool = False,
+    log_clipping: bool = True,
+) -> str:
+    """Convenience function for saving audio to disk. Returns the filename the audio was written to.
+    Args:
+        stem_name (str or Path): Filename without extension which will be added automatically.
+        wav (torch.Tensor): Audio data to save.
+        sample_rate (int): Sample rate of audio data.
+        format (str): Either "wav", "mp3", "ogg", or "flac".
+        normalize (bool): if `True` (default), normalizes according to the prescribed
+            strategy (see after). If `False`, the strategy is only used in case clipping
+            would happen.
+        strategy (str): Can be either 'clip', 'peak', or 'rms'. Default is 'peak',
+            i.e. audio is normalized by its largest value. RMS normalizes by root-mean-square
+            with extra headroom to avoid clipping. 'clip' just clips.
+        peak_clip_headroom_db (float): Headroom in dB when doing 'peak' or 'clip' strategy.
+        rms_headroom_db (float): Headroom in dB when doing 'rms' strategy. This must be much larger
+            than the `peak_clip` one to avoid further clipping.
+        loudness_headroom_db (float): Target loudness for loudness normalization.
+        loudness_compressor (bool): Uses tanh for soft clipping when strategy is 'loudness'.
+         when strategy is 'loudness' log_clipping (bool): If True, basic logging on stderr when clipping still
+            occurs despite strategy (only for 'rms').
+    Returns:
+        str: Base64 encoded audio data.
+    """
+    assert wav.dtype.is_floating_point, "wav is not floating point"
+    if wav.dim() == 1:
+        print("Warning: adding a channel dimension to the input audio.")
+        wav = wav[None]
+    elif wav.dim() > 2:
+        raise ValueError("Input wav should be at most 2 dimension.")
+    assert wav.isfinite().all()
+    wav = normalize_audio(
+        wav,
+        normalize,
+        strategy,
+        peak_clip_headroom_db,
+        rms_headroom_db,
+        loudness_headroom_db,
+        loudness_compressor,
+        log_clipping=log_clipping,
+        sample_rate=sample_rate,
+    )
+    buffer = io.BytesIO()
+
+    audio_array = wav.numpy()
+    audio_array = audio_array.reshape((audio_array.shape[1],))
+
+    try:
+        # Write the WAV data to the buffer
+        soundfile.write(buffer, audio_array, sample_rate, format=format)
+        buffer.seek(0)
+
+        # Encode the buffer as Base64
+        encoded_string = base64.b64encode(buffer.read()).decode("utf-8")
+        return encoded_string
+    except Exception as e:
+        raise RuntimeError(f"Error encoding audio to base64: {e}")
